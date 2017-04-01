@@ -1,13 +1,16 @@
-(ns clojure.core.match
+(ns core.match
   (:refer-clojure :exclude [compile])
-  (:use [clojure.core.match.protocols])
-  (:require [clojure.set :as set]
-            [clojure.tools.analyzer :as ana]
-            [clojure.tools.analyzer.jvm :as ana-jvm]
-            [clojure.tools.analyzer.passes.jvm.annotate-loops :as loops])
-  (:import [java.io Writer]
-           [clojure.core.match.protocols IExistentialPattern IPseudoPattern]))
+  (:use [core.match.protocols])
+  (:require [clojure.set :as set])
+  (:import [core.match.protocols IExistentialPattern IPseudoPattern])
+  )
 
+
+(deftype Writer [write]
+  )
+
+
+ 
 
 ;; =============================================================================
 ;; # Introduction
@@ -60,7 +63,7 @@
 (def ^{:dynamic true
        :doc "Allow map matching syntax to check for IMatchLookup"}
   *match-lookup* false)
-
+ 
 (def ^{:dynamic true
        :doc "Default vector type. Can be rebound allowing emission of
              custom inline code for vector patterns, for example
@@ -81,12 +84,12 @@
 (defn backtrack-expr []
   (if *clojurescript*
     `(throw cljs.core.match/backtrack)
-    `(throw clojure.core.match/backtrack)))
+    `(throw core.match/backtrack)))
 
 (defn backtrack-sym []
   (if *clojurescript*
     'cljs.core.match/backtrack
-    'clojure.core.match/backtrack))
+    'core.match/backtrack))
 
 (def ^{:dynamic true} *backtrack-stack* ())
 (def ^{:dynamic true} *root* true)
@@ -99,21 +102,9 @@
         msg))
     (reset! *warned* true)))
 
-(defn analyze [form env]
-  (binding [ana/macroexpand-1 ana-jvm/macroexpand-1
-            ana/create-var    ana-jvm/create-var
-            ana/parse         ana-jvm/parse
-            ana/var?          var?]
-    (ana/analyze form env)))
+(defn analyze [form env])
 
-(defn get-loop-locals []
-  (let [LOOP_LOCALS clojure.lang.Compiler/LOOP_LOCALS]
-    (mapcat
-      (fn [b]
-        (let [name (.sym ^clojure.lang.Compiler$LocalBinding b)]
-          [name name]))
-      (when (bound? LOOP_LOCALS)
-        @LOOP_LOCALS))))
+(defn get-loop-locals [])
 
 ;; =============================================================================
 ;; # Map Pattern Interop
@@ -169,23 +160,26 @@
 (defn with-tag [t ocr]
   (let [the-tag (tag t)
         the-tag (if (and (class? the-tag)
-                         (.isArray ^Class the-tag))
-                  (.getName ^Class the-tag)
+                         ;(.isArray ^Class the-tag)
+                         )
+                  ;(.getName ^Class the-tag)
                   the-tag)]
     (vary-meta ocr assoc :tag the-tag)))
 
 (defmethod test-inline ::vector
   [t ocr]
-  (let [the-tag (tag t)
-        c (cond
-            (class? the-tag) the-tag
-            (string? the-tag) (Class/forName the-tag)
-            (symbol? the-tag) (Class/forName (str the-tag))
-            :else (throw (Error. (str "Unsupported tag type" the-tag))))]
-    (cond
-      (= t ::vector) `(vector? ~ocr)
-      (and (.isArray ^Class c) *clojurescript*) `(cljs.core/array? ~ocr)
-      :else `(instance? ~c ~ocr))))
+;  (let [the-tag (tag t)
+;        c (cond
+;            (class? the-tag) the-tag
+;            (string? the-tag) (Class/forName the-tag)
+;            (symbol? the-tag) (Class/forName (str the-tag))
+;            :else (throw (Error. (str "Unsupported tag type" the-tag))))]
+;    (cond
+;      (= t ::vector) `(vector? ~ocr)
+;      (and (.isArray ^Class c) *clojurescript*) `(cljs.core/array? ~ocr)
+;      false 
+;      :else `(instance? ~c ~ocr)))
+  )
 
 (defmethod test-with-size-inline ::vector
   [t ocr size]
@@ -266,7 +260,7 @@
 
 (deftype PatternRow [ps action bindings]
   Object
-  (equals [_ other]
+  (Equals [_ other]
     (and (instance? PatternRow other)
          (= ps (:ps other))
          (= action (:action other))
@@ -327,10 +321,11 @@
     (nth ps n))
 
   clojure.lang.IPersistentCollection
-  (cons [_ x]
-    (PatternRow. (conj ps x) action bindings))
+  ;(cons [_ x]
+  ;  (PatternRow. (conj ps x) action bindings))
   (equiv [this other]
-    (.equals this other)))
+    (.equals this other))
+)
 
 (defn pattern-row
   ([ps action] 
@@ -434,7 +429,7 @@
 (declare to-source)
 
 (defn dag-clause-to-clj [occurrence pattern action]
-  (let [test (if (instance? clojure.core.match.protocols.IPatternCompile pattern)
+  (let [test (if (instance? core.match.protocols.IPatternCompile pattern)
                (to-source* pattern occurrence) 
                (to-source pattern occurrence))]
     [test (n-to-clj action)]))
@@ -856,7 +851,7 @@ col with the first column and compile the result"
 
 (deftype WildcardPattern [sym named _meta]
   Object
-  (equals [_ other]
+  (Equals [_ other]
     (and (instance? WildcardPattern other)
          (if named
            (= sym (:sym other))
@@ -894,8 +889,9 @@ col with the first column and compile the result"
 (defn named-wildcard-pattern? [x]
   (and (instance? WildcardPattern x) (:named x)))
 
-(defmethod print-method WildcardPattern [p ^Writer writer]
-  (.write writer (str "<WildcardPattern: " (:sym p) ">")))
+(defmethod print-method WildcardPattern [p writer]
+  (prn (str "<WildcardPattern: " (:sym p) ">"))
+  )
 
 ;; -----------------------------------------------------------------------------
 ;; ## Literal Pattern
@@ -907,11 +903,11 @@ col with the first column and compile the result"
 
 (deftype LiteralPattern [l _meta]
   Object
-  (toString [_]
-    (if (nil? l)
-      "nil"
-      (pr-str l)))
-  (equals [_ other]
+  ;(toString [_]
+  ;  (if (nil? l)
+  ;    "nil"
+  ;    (pr-str l)))
+  (Equals [_ other]
     (and (instance? LiteralPattern other) (= l (:l other))))
 
   clojure.lang.IObj
@@ -955,8 +951,9 @@ col with the first column and compile the result"
 (defn literal-pattern? [x]
   (instance? LiteralPattern x))
 
-(defmethod print-method LiteralPattern [p ^Writer writer]
-  (.write writer (str "<LiteralPattern: " p ">")))
+(defmethod print-method LiteralPattern [p writer]
+  ;(.write writer 
+  (prn   (str "<LiteralPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; # Seq Pattern
@@ -1010,9 +1007,9 @@ col with the first column and compile the result"
     (into [hsym tsym] (drop-nth ocrs 0))))
 
 (deftype SeqPattern [s _meta]
-  Object
-  (toString [_]
-    (str s))
+  ;Object
+  ;(toString [_]
+  ;  (str s))
 
   clojure.lang.IObj
   (meta [_] _meta)
@@ -1056,8 +1053,9 @@ col with the first column and compile the result"
 (defn seq-pattern? [x]
   (instance? SeqPattern x))
 
-(defmethod print-method SeqPattern [p ^Writer writer]
-  (.write writer (str "<SeqPattern: " p ">")))
+(defmethod print-method SeqPattern [p  writer]
+  (prn 
+    (str "<SeqPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; # Rest Pattern
@@ -1074,8 +1072,8 @@ col with the first column and compile the result"
 (defn rest-pattern? [x]
   (instance? RestPattern x))
 
-(defmethod print-method RestPattern [p ^Writer writer]
-  (.write writer (str "<RestPattern: " (:p p) ">")))
+(defmethod print-method RestPattern [p writer]
+  (prn (str "<RestPattern: " (:p p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; # Map Pattern
@@ -1110,8 +1108,8 @@ col with the first column and compile the result"
 (defn map-key-pattern? [x]
   (instance? MapKeyPattern x))
 
-(defmethod print-method MapKeyPattern [p ^Writer writer]
-  (.write writer (str "<MapKeyPattern: " (:p p) ">")))
+(defmethod print-method MapKeyPattern [p writer]
+  (prn (str "<MapKeyPattern: " (:p p) ">")))
 
 (declare map-pattern? guard-pattern)
 
@@ -1194,9 +1192,9 @@ col with the first column and compile the result"
 
 (deftype MapPattern [m _meta]
   Object
-  (toString [_]
-    (str m " :only " (or (:only _meta) [])))
-  (equals [_ other]
+  ;(toString [_]
+  ;  (str m " :only " (or (:only _meta) [])))
+  (Equals [_ other]
     (and (instance? MapPattern other) (= m (:m other))))
 
   clojure.lang.IObj
@@ -1246,8 +1244,8 @@ col with the first column and compile the result"
 (defn map-pattern? [x]
   (instance? MapPattern x))
 
-(defmethod print-method MapPattern [p ^Writer writer]
-  (.write writer (str "<MapPattern: " p ">")))
+(defmethod print-method MapPattern [p  writer]
+  (prn (str "<MapPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; Vector Pattern
@@ -1333,9 +1331,9 @@ col with the first column and compile the result"
 
 (deftype VectorPattern [v t size offset rest? _meta]
   Object
-  (toString [_]
-    (str v " " t))
-  (equals [_ other]
+  ;(toString [_]
+  ;  (str v " " t))
+  (Equals [_ other]
     (and (instance? VectorPattern other)
          (= [v t size offset rest?]
             (map #(% other) [:v :t :size :offset :rest?]))))
@@ -1413,8 +1411,8 @@ col with the first column and compile the result"
 (defn vector-pattern? [x]
   (instance? VectorPattern x))
 
-(defmethod print-method VectorPattern [p ^Writer writer]
-  (.write writer (str "<VectorPattern: " p ">")))
+(defmethod print-method VectorPattern [p  writer]
+  (prn (str "<VectorPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; Or Patterns
@@ -1434,9 +1432,8 @@ col with the first column and compile the result"
   IPseudoPattern
 
   Object
-  (toString [this]
-    (str ps))
-  (equals [_ other]
+
+  (Equals [_ other]
     (and (instance? OrPattern other) (= ps (:ps other))))
 
   clojure.lang.IObj
@@ -1467,8 +1464,8 @@ col with the first column and compile the result"
 (defn or-pattern? [x]
   (instance? OrPattern x))
 
-(defmethod print-method OrPattern [p ^Writer writer]
-  (.write writer (str "<OrPattern: " (:ps p) ">")))
+(defmethod print-method OrPattern [p  writer]
+  ( (str "<OrPattern: " (:ps p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; ## Guard Patterns
@@ -1489,9 +1486,9 @@ col with the first column and compile the result"
 
 (deftype GuardPattern [p gs _meta]
   Object
-  (toString [this]
-    (str p " :guard " gs))
-  (equals [_ other]
+  ;(toString [this]
+  ;  (str p " :guard " gs))
+  (Equals [_ other]
     (and (instance? GuardPattern other)
          (= p (:p other))
          (= gs (:gs other))))
@@ -1531,8 +1528,8 @@ col with the first column and compile the result"
 (defn guard-pattern? [x]
   (instance? GuardPattern x))
 
-(defmethod print-method GuardPattern [p ^Writer writer]
-  (.write writer (str "<GuardPattern " (:p p) " :guard " (:gs p) ">")))
+(defmethod print-method GuardPattern [p  writer]
+  (prn  (str "<GuardPattern " (:p p) " :guard " (:gs p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; ## Function Application Pattern
@@ -1578,9 +1575,9 @@ col with the first column and compile the result"
   IPseudoPattern
 
   Object
-  (toString [this]
-  (str p " :<< " form))
-  (equals [_ other]
+  ;(toString [this]
+  ;(str p " :<< " form))
+  (Equals [_ other]
     (and (instance? AppPattern other)
          (= p (:p other))
          (= form (:form other))))
@@ -1613,6 +1610,8 @@ col with the first column and compile the result"
 
 (defn app-pattern? [x]
   (instance? AppPattern x))
+
+
 
 (defmethod print-method AppPattern [p ^Writer writer]
   (.write writer (str "<AppPattern " (:p p) " :app " (:form p) ">")))
@@ -1653,9 +1652,9 @@ col with the first column and compile the result"
 
 (deftype PredicatePattern [p gs _meta]
   Object
-  (toString [this]
-    (str p " :when " gs))
-  (equals [_ other]
+  ;(toString [this]
+  ;  (str p " :when " gs))
+  (Equals [_ other]
     (and (instance? PredicatePattern other)
          (= p (:p other))
          (= gs (:gs other))))  
@@ -1866,7 +1865,7 @@ col with the first column and compile the result"
 (defmethod emit-pattern-for-syntax :default
   [[_ s :as l]]
   (throw
-    (AssertionError.
+    (Exception.
       (str "Invalid list syntax " s " in " l ". "
         "Valid syntax: "
         (vec
@@ -1914,6 +1913,7 @@ col with the first column and compile the result"
   [pat action]
   (let [ps (map emit-pattern (group-keywords pat))]
     (pattern-row ps action)))
+
 
 (defn wildcards-and-duplicates
   "Returns a vector of two elements: the set of all wildcards and the 
@@ -1968,7 +1968,7 @@ col with the first column and compile the result"
   (let [pat (group-keywords pat)]
     (when (not (vector? pat))
       (throw
-        (AssertionError. 
+        (Exception. 
           (str "Pattern row " rownum
             ": Pattern rows must be wrapped in []."
             " Try changing " pat " to [" pat "]." 
@@ -1977,14 +1977,14 @@ col with the first column and compile the result"
                 " They cannot be wrapped in a :when guard, for example"))))))
     (when (not= (count pat) nvars)
       (throw
-        (AssertionError.
+        (Exception.
           (str "Pattern row " rownum
             ": Pattern row has differing number of patterns. "
             pat " has " (count pat) " pattern/s, expecting "
             nvars " for occurrences " vars))))
     (when-let [duplicates (seq (find-duplicate-wildcards pat))]
       (throw
-        (AssertionError.
+        (Exception.
           (str "Pattern row " rownum
             ": Pattern row reuses wildcards in " pat
             ".  The following wildcards are ambiguous: "
@@ -1998,12 +1998,12 @@ col with the first column and compile the result"
 (defn check-matrix-args [vars clauses]
   (when (symbol? vars)
     (throw
-      (AssertionError.
+      (Exception.
         (str "Occurrences must be in a vector."
           " Try changing " vars " to [" vars "]"))))
   (when (not (vector? vars))
     (throw
-      (AssertionError.
+      (Exception.
         (str "Occurrences must be in a vector. "
           vars " is not a vector"))))
   (let [nvars (count vars)
@@ -2011,7 +2011,7 @@ col with the first column and compile the result"
     (doseq [[[pat _] rownum] (map vector (butlast cls) (rest (range)))]
       (when (= :else pat)
         (throw
-          (AssertionError.
+          (Exception.
             (str "Pattern row " rownum
               ": :else form only allowed on final pattern row"))))
       (check-pattern pat vars nvars rownum))
@@ -2020,7 +2020,7 @@ col with the first column and compile the result"
         (check-pattern pat vars nvars (count cls)))))
   (when (odd? (count clauses)) 
     (throw
-      (AssertionError.
+      (Exception.
         (str "Uneven number of Pattern Rows. The last form `"
           (last clauses) "` seems out of place.")))))
 
@@ -2069,7 +2069,7 @@ col with the first column and compile the result"
 
 (defn executable-form [node]
   (n-to-clj node))
-
+ 
 ;; TODO: more sophisticated analysis that actually checks that recur is
 ;; not being used as a local binding when it occurs - David
 

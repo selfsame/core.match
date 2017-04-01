@@ -1,4 +1,4 @@
-(ns clojure.core.match.protocols)
+(ns core.match.protocols)
 
 ;; =============================================================================
 ;; # Protocols
@@ -38,4 +38,4 @@
 
 (definterface IExistentialPattern)
 
-(definterface IPseudoPattern)
+(definterface IPseudoPattern) 
