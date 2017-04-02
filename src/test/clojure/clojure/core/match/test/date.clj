@@ -4,7 +4,7 @@
   (:use clojure.core.match.date))
 
 (deftest date-test1
-  (is (= (matchm [(java.util.Date. 2010 10 1 12 30)]
+  (is (= (matchm [(DateTime. 2010 10 1 12 30 0)]
            [{:year 2009 :month a}] a
            [{:year (:or 2010 2011) :month b}] b
            :else :wrong)

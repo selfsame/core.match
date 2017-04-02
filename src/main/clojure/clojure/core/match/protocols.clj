@@ -1,4 +1,4 @@
-(ns core.match.protocols)
+(ns clojure.core.match.protocols)
 
 ;; =============================================================================
 ;; # Protocols

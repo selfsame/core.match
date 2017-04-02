@@ -357,19 +357,19 @@
 
 
 
-(extend-type java.util.Date
+(extend-type DateTime
   IMatchLookup
   (val-at [this k not-found]
     (case k
-      :year    (.getYear this)
-      :month   (.getMonth this)
-      :date    (.getDate this)
-      :hours   (.getHours this)
-      :minutes (.getMinutes this)
+      :year    (.Year this)
+      :month   (.Month this)
+      :date    (.Date this)
+      :hours   (.Hour this)
+      :minutes (.Minute this)
       not-found)))
 
 (deftest map-pattern-interop-1
-  (is (= (let [d (java.util.Date. 2010 10 1 12 30)]
+  (is (= (let [d (DateTime. 2010 10 1 12 30 0)]
            (matchm [d]
              [{:year 2009 :month a}] [:a0 a]
              [{:year (:or 2010 2011) :month b}] [:a1 b]
@@ -576,7 +576,7 @@
 
 (deftest vector-pattern-int-array-1
   (is (= (let [x (int-array [1 2 3])]
-           (match [^ints x]
+           (match [^|System.Int32[]| x]
              [[_ _ 2]] :a0
              [[1 1 3]] :a1
              [[1 2 3]] :a2
@@ -585,7 +585,7 @@
 
 (deftest vector-pattern-object-array-1
   (is (= (let [x (object-array [:foo :bar :baz])]
-           (match [^objects x]
+           (match [^|System.Object[]| x]
              [[_ _ :bar]] :a0
              [[:foo :foo :bar]] :a1
              [[:foo :bar :baz]] :a2

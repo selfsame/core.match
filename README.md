@@ -1,8 +1,7 @@
 match
 ====
 
-An optimized pattern matching library for Clojure. It supports Clojure
-1.5.1 and later as well as ClojureScript.
+An optimized pattern matching library for Clojure. (Clojure-CLR Fork)
 
 You can find more detailed information
 [here](https://github.com/clojure/core.match/wiki/Overview).

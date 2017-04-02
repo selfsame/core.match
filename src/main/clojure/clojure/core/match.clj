@@ -1,16 +1,14 @@
-(ns core.match
+(ns clojure.core.match
   (:refer-clojure :exclude [compile])
-  (:use [core.match.protocols])
-  (:require [clojure.set :as set])
-  (:import [core.match.protocols IExistentialPattern IPseudoPattern])
-  )
+  (:use [clojure.core.match.protocols])
+  (:require [clojure.set :as set]
+            ;[clojure.tools.analyzer :as ana]
+            ;[clojure.tools.analyzer.jvm :as ana-jvm]
+            ;[clojure.tools.analyzer.passes.jvm.annotate-loops :as loops]
+            )
+  (:import [System.IO TextWriter]
+           [clojure.core.match.protocols IExistentialPattern IPseudoPattern]))
 
-
-(deftype Writer [write]
-  )
-
-
- 
 
 ;; =============================================================================
 ;; # Introduction
@@ -63,7 +61,7 @@
 (def ^{:dynamic true
        :doc "Allow map matching syntax to check for IMatchLookup"}
   *match-lookup* false)
- 
+
 (def ^{:dynamic true
        :doc "Default vector type. Can be rebound allowing emission of
              custom inline code for vector patterns, for example
@@ -84,12 +82,12 @@
 (defn backtrack-expr []
   (if *clojurescript*
     `(throw cljs.core.match/backtrack)
-    `(throw core.match/backtrack)))
+    `(throw clojure.core.match/backtrack)))
 
 (defn backtrack-sym []
   (if *clojurescript*
     'cljs.core.match/backtrack
-    'core.match/backtrack))
+    'clojure.core.match/backtrack))
 
 (def ^{:dynamic true} *backtrack-stack* ())
 (def ^{:dynamic true} *root* true)
@@ -102,9 +100,21 @@
         msg))
     (reset! *warned* true)))
 
-(defn analyze [form env])
+#_(defn analyze [form env]
+  (binding [ana/macroexpand-1 ana-jvm/macroexpand-1
+            ana/create-var    ana-jvm/create-var
+            ana/parse         ana-jvm/parse
+            ana/var?          var?]
+    (ana/analyze form env)))
 
-(defn get-loop-locals [])
+#_(defn get-loop-locals []
+  (let [LOOP_LOCALS clojure.lang.Compiler/LOOP_LOCALS]
+    (mapcat
+      (fn [b]
+        (let [name (.sym ^clojure.lang.Compiler$LocalBinding b)]
+          [name name]))
+      (when (bound? LOOP_LOCALS)
+        @LOOP_LOCALS))))
 
 ;; =============================================================================
 ;; # Map Pattern Interop
@@ -160,26 +170,23 @@
 (defn with-tag [t ocr]
   (let [the-tag (tag t)
         the-tag (if (and (class? the-tag)
-                         ;(.isArray ^Class the-tag)
-                         )
-                  ;(.getName ^Class the-tag)
+                         (.IsArray ^System.MonoType the-tag))
+                  (.Name ^System.MonoType the-tag)
                   the-tag)]
     (vary-meta ocr assoc :tag the-tag)))
 
 (defmethod test-inline ::vector
   [t ocr]
-;  (let [the-tag (tag t)
-;        c (cond
-;            (class? the-tag) the-tag
-;            (string? the-tag) (Class/forName the-tag)
-;            (symbol? the-tag) (Class/forName (str the-tag))
-;            :else (throw (Error. (str "Unsupported tag type" the-tag))))]
-;    (cond
-;      (= t ::vector) `(vector? ~ocr)
-;      (and (.isArray ^Class c) *clojurescript*) `(cljs.core/array? ~ocr)
-;      false 
-;      :else `(instance? ~c ~ocr)))
-  )
+  (let [the-tag (tag t)
+        c (cond
+            (class? the-tag) the-tag
+            (string? the-tag) (Type/GetType the-tag)
+            (symbol? the-tag) (Type/GetType (str the-tag))
+            :else (throw (Exception. (str "Unsupported tag type" the-tag))))]
+    (cond
+      (= t ::vector) `(vector? ~ocr)
+      (and (.IsArray ^System.MonoType c) *clojurescript*) `(cljs.core/array? ~ocr)
+      :else `(instance? ~c ~ocr))))
 
 (defmethod test-with-size-inline ::vector
   [t ocr size]
@@ -321,11 +328,10 @@
     (nth ps n))
 
   clojure.lang.IPersistentCollection
-  ;(cons [_ x]
-  ;  (PatternRow. (conj ps x) action bindings))
+  (^clojure.lang.IPersistentCollection cons [_ x]
+    (PatternRow. (conj ps x) action bindings))
   (equiv [this other]
-    (.equals this other))
-)
+    (.Equals this other)))
 
 (defn pattern-row
   ([ps action] 
@@ -429,7 +435,7 @@
 (declare to-source)
 
 (defn dag-clause-to-clj [occurrence pattern action]
-  (let [test (if (instance? core.match.protocols.IPatternCompile pattern)
+  (let [test (if (instance? clojure.core.match.protocols.IPatternCompile pattern)
                (to-source* pattern occurrence) 
                (to-source pattern occurrence))]
     [test (n-to-clj action)]))
@@ -889,9 +895,8 @@ col with the first column and compile the result"
 (defn named-wildcard-pattern? [x]
   (and (instance? WildcardPattern x) (:named x)))
 
-(defmethod print-method WildcardPattern [p writer]
-  (prn (str "<WildcardPattern: " (:sym p) ">"))
-  )
+(defmethod print-method WildcardPattern [p ^TextWriter writer]
+  (.Write writer (str "<WildcardPattern: " (:sym p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; ## Literal Pattern
@@ -903,10 +908,10 @@ col with the first column and compile the result"
 
 (deftype LiteralPattern [l _meta]
   Object
-  ;(toString [_]
-  ;  (if (nil? l)
-  ;    "nil"
-  ;    (pr-str l)))
+  (ToString [_]
+    (if (nil? l)
+      "nil"
+      (pr-str l)))
   (Equals [_ other]
     (and (instance? LiteralPattern other) (= l (:l other))))
 
@@ -951,9 +956,8 @@ col with the first column and compile the result"
 (defn literal-pattern? [x]
   (instance? LiteralPattern x))
 
-(defmethod print-method LiteralPattern [p writer]
-  ;(.write writer 
-  (prn   (str "<LiteralPattern: " p ">")))
+(defmethod print-method LiteralPattern [p ^TextWriter writer]
+  (.Write writer (str "<LiteralPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; # Seq Pattern
@@ -1007,9 +1011,9 @@ col with the first column and compile the result"
     (into [hsym tsym] (drop-nth ocrs 0))))
 
 (deftype SeqPattern [s _meta]
-  ;Object
-  ;(toString [_]
-  ;  (str s))
+  Object
+  (ToString [_]
+    (str s))
 
   clojure.lang.IObj
   (meta [_] _meta)
@@ -1053,9 +1057,8 @@ col with the first column and compile the result"
 (defn seq-pattern? [x]
   (instance? SeqPattern x))
 
-(defmethod print-method SeqPattern [p  writer]
-  (prn 
-    (str "<SeqPattern: " p ">")))
+(defmethod print-method SeqPattern [p ^TextWriter writer]
+  (.Write writer (str "<SeqPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; # Rest Pattern
@@ -1072,8 +1075,8 @@ col with the first column and compile the result"
 (defn rest-pattern? [x]
   (instance? RestPattern x))
 
-(defmethod print-method RestPattern [p writer]
-  (prn (str "<RestPattern: " (:p p) ">")))
+(defmethod print-method RestPattern [p ^TextWriter writer]
+  (.Write writer (str "<RestPattern: " (:p p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; # Map Pattern
@@ -1108,8 +1111,8 @@ col with the first column and compile the result"
 (defn map-key-pattern? [x]
   (instance? MapKeyPattern x))
 
-(defmethod print-method MapKeyPattern [p writer]
-  (prn (str "<MapKeyPattern: " (:p p) ">")))
+(defmethod print-method MapKeyPattern [p ^TextWriter writer]
+  (.Write writer (str "<MapKeyPattern: " (:p p) ">")))
 
 (declare map-pattern? guard-pattern)
 
@@ -1154,12 +1157,12 @@ col with the first column and compile the result"
         ps      (doall (map ocr-map all-keys))
         ps      (if @only?
                   (if only
-                    (let [a (with-meta (gensym) {:tag 'java.util.Map})]
+                    (let [a (with-meta (gensym) {}#_{:tag 'java.util.Map} )] ;TODO selfsame
                       (cons
                         (guard-pattern (wildcard-pattern)
                           (set [(if *clojurescript*
                                   `(fn [~a] (= (set (keys ~a)) #{~@only}))
-                                  `(fn [~a] (= (.keySet ~a) #{~@only})))]))
+                                  `(fn [~a] (= (set (keys ~a))  #{~@only})))])) ;TODO why was this (.keySet ~a) ?
                         ps))
                     (cons (wildcard-pattern) ps))
                   ps)]
@@ -1169,7 +1172,7 @@ col with the first column and compile the result"
   (vec (map #(specialize-map-pattern-row % env) rows)))
 
 (defn gen-map-pattern-ocr [ocr k]
-  (gensym (str (name ocr) "_" (.replace (name k) "." "_DOT_") "__")))
+  (gensym (str (name ocr) "_" (.Replace (name k) "." "_DOT_") "__")))
 
 (defn map-pattern-matrix-ocr-sym [k env]
   (let [focr (:focr env)
@@ -1192,8 +1195,8 @@ col with the first column and compile the result"
 
 (deftype MapPattern [m _meta]
   Object
-  ;(toString [_]
-  ;  (str m " :only " (or (:only _meta) [])))
+  (ToString [_]
+    (str m " :only " (or (:only _meta) [])))
   (Equals [_ other]
     (and (instance? MapPattern other) (= m (:m other))))
 
@@ -1244,8 +1247,8 @@ col with the first column and compile the result"
 (defn map-pattern? [x]
   (instance? MapPattern x))
 
-(defmethod print-method MapPattern [p  writer]
-  (prn (str "<MapPattern: " p ">")))
+(defmethod print-method MapPattern [p ^TextWriter writer]
+  (.Write writer (str "<MapPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; Vector Pattern
@@ -1331,8 +1334,8 @@ col with the first column and compile the result"
 
 (deftype VectorPattern [v t size offset rest? _meta]
   Object
-  ;(toString [_]
-  ;  (str v " " t))
+  (ToString [_]
+    (str v " " t))
   (Equals [_ other]
     (and (instance? VectorPattern other)
          (= [v t size offset rest?]
@@ -1411,8 +1414,8 @@ col with the first column and compile the result"
 (defn vector-pattern? [x]
   (instance? VectorPattern x))
 
-(defmethod print-method VectorPattern [p  writer]
-  (prn (str "<VectorPattern: " p ">")))
+(defmethod print-method VectorPattern [p ^TextWriter writer]
+  (.Write writer (str "<VectorPattern: " p ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; Or Patterns
@@ -1432,7 +1435,8 @@ col with the first column and compile the result"
   IPseudoPattern
 
   Object
-
+  (ToString [this]
+    (str ps))
   (Equals [_ other]
     (and (instance? OrPattern other) (= ps (:ps other))))
 
@@ -1464,8 +1468,8 @@ col with the first column and compile the result"
 (defn or-pattern? [x]
   (instance? OrPattern x))
 
-(defmethod print-method OrPattern [p  writer]
-  ( (str "<OrPattern: " (:ps p) ">")))
+(defmethod print-method OrPattern [p ^TextWriter writer]
+  (.Write writer (str "<OrPattern: " (:ps p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; ## Guard Patterns
@@ -1486,8 +1490,8 @@ col with the first column and compile the result"
 
 (deftype GuardPattern [p gs _meta]
   Object
-  ;(toString [this]
-  ;  (str p " :guard " gs))
+  (ToString [this]
+    (str p " :guard " gs))
   (Equals [_ other]
     (and (instance? GuardPattern other)
          (= p (:p other))
@@ -1528,8 +1532,8 @@ col with the first column and compile the result"
 (defn guard-pattern? [x]
   (instance? GuardPattern x))
 
-(defmethod print-method GuardPattern [p  writer]
-  (prn  (str "<GuardPattern " (:p p) " :guard " (:gs p) ">")))
+(defmethod print-method GuardPattern [p ^TextWriter writer]
+  (.Write writer (str "<GuardPattern " (:p p) " :guard " (:gs p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; ## Function Application Pattern
@@ -1575,8 +1579,8 @@ col with the first column and compile the result"
   IPseudoPattern
 
   Object
-  ;(toString [this]
-  ;(str p " :<< " form))
+  (ToString [this]
+  (str p " :<< " form))
   (Equals [_ other]
     (and (instance? AppPattern other)
          (= p (:p other))
@@ -1611,10 +1615,8 @@ col with the first column and compile the result"
 (defn app-pattern? [x]
   (instance? AppPattern x))
 
-
-
-(defmethod print-method AppPattern [p ^Writer writer]
-  (.write writer (str "<AppPattern " (:p p) " :app " (:form p) ">")))
+(defmethod print-method AppPattern [p ^TextWriter writer]
+  (.Write writer (str "<AppPattern " (:p p) " :app " (:form p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; ## Predicate Patterns
@@ -1652,8 +1654,8 @@ col with the first column and compile the result"
 
 (deftype PredicatePattern [p gs _meta]
   Object
-  ;(toString [this]
-  ;  (str p " :when " gs))
+  (ToString [this]
+    (str p " :when " gs))
   (Equals [_ other]
     (and (instance? PredicatePattern other)
          (= p (:p other))
@@ -1694,8 +1696,8 @@ col with the first column and compile the result"
 (defn predicate-pattern? [x]
   (instance? PredicatePattern x))
 
-(defmethod print-method PredicatePattern [p ^Writer writer]
-  (.write writer (str "<PredicatePattern " (:p p) " :when " (:gs p) ">")))
+(defmethod print-method PredicatePattern [p ^TextWriter writer]
+  (.Write writer (str "<PredicatePattern " (:p p) " :when " (:gs p) ">")))
 
 ;; -----------------------------------------------------------------------------
 ;; Pattern Comparisons
@@ -1914,7 +1916,6 @@ col with the first column and compile the result"
   (let [ps (map emit-pattern (group-keywords pat))]
     (pattern-row ps action)))
 
-
 (defn wildcards-and-duplicates
   "Returns a vector of two elements: the set of all wildcards and the 
    set of duplicate wildcards.  The underbar _ is excluded from both."
@@ -2060,7 +2061,7 @@ col with the first column and compile the result"
                             (js/Error.
                               (str "No matching clause: " ~@(interpose " " vs))))
                          `(throw
-                            (IllegalArgumentException.
+                            (Exception.
                               (str "No matching clause: " ~@(interpose " " vs)))))])
                    cs)))]
       (pattern-matrix
@@ -2069,7 +2070,7 @@ col with the first column and compile the result"
 
 (defn executable-form [node]
   (n-to-clj node))
- 
+
 ;; TODO: more sophisticated analysis that actually checks that recur is
 ;; not being used as a local binding when it occurs - David
 
